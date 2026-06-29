@@ -1,0 +1,21 @@
+name = "reall-push"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# KV namespace holding device-token ↔ GitLab-user mappings.
+# Create it with:  wrangler kv namespace create DEVICES
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "DEVICES"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# Non-secret config. Secrets are set via `wrangler secret put`.
+APNS_TOPIC = "com.qwe7002.reall"
+APNS_PRODUCTION = "false"
+
+# Secrets (do NOT put values here — use `wrangler secret put NAME`):
+#   APNS_AUTH_KEY          contents of AuthKey_XXXXXXXXXX.p8
+#   APNS_KEY_ID            10-character key id
+#   APNS_TEAM_ID           Apple Developer team id
+#   GITLAB_WEBHOOK_SECRET  shared secret also set on the GitLab webhook
