@@ -42,7 +42,8 @@ wrangler kv namespace create DEVICES
 wrangler secret put APNS_AUTH_KEY        # paste the full .p8 file contents
 wrangler secret put APNS_KEY_ID          # e.g. ABCDE12345
 wrangler secret put APNS_TEAM_ID         # e.g. A1B2C3D4E5
-wrangler secret put GITLAB_WEBHOOK_SECRET # any random string
+# Optional — only needed if you add webhooks manually instead of from the app:
+# wrangler secret put GITLAB_WEBHOOK_SECRET
 
 # 3. Adjust vars in wrangler.toml
 #    APNS_TOPIC      = your app bundle id (com.qwe7002.reall)
@@ -54,27 +55,32 @@ wrangler deploy
 
 This prints your Worker URL, e.g. `https://reall-push.<account>.workers.dev`.
 
-## Wire up GitLab
-
-In each project (or at the group level):
-**Settings → Webhooks → Add new webhook**
-
-- **URL**: `https://reall-push.<account>.workers.dev/webhook`
-- **Secret token**: the same value you set for `GITLAB_WEBHOOK_SECRET`
-- **Trigger**: enable *Pipeline events*, *Job events*, *Merge request events*,
-  *Comments*, and/or *Issues events* as desired.
-
-## Wire up the app
+## Wire up the app (webhooks are automatic)
 
 In Reall → **Profile → Settings → Notifications**:
 
 1. Toggle **Push Notifications** on.
 2. Paste your Worker URL (`https://reall-push.<account>.workers.dev`).
 3. Tap **Save & Register** and grant the notification permission.
+4. Tap **Install on all my projects** — the app creates the GitLab webhooks for
+   you via the API. (Or flip **Push notifications** on individual project pages.)
 
-The app registers its APNs device token against your GitLab user id, and the
-Worker delivers matching events from then on. You can now turn off GitLab's
-email notifications.
+When you register, the Worker issues a **per-user webhook secret** and returns
+it to the app. The app uses it as the webhook token when installing hooks, and
+the Worker authenticates incoming webhooks against it — so you never copy a
+secret by hand, and there's no single shared secret across users.
+
+You can now turn off GitLab's email notifications.
+
+### Manual webhook setup (optional)
+
+If you'd rather add the webhook yourself, set the optional
+`GITLAB_WEBHOOK_SECRET` secret and, in each project,
+**Settings → Webhooks → Add new webhook**:
+
+- **URL**: `https://reall-push.<account>.workers.dev/webhook`
+- **Secret token**: the value of `GITLAB_WEBHOOK_SECRET`
+- **Trigger**: *Pipeline*, *Job*, *Merge request*, *Comments*, *Issues* events.
 
 ## Endpoints
 

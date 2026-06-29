@@ -29,7 +29,8 @@ export interface Env {
   APNS_TEAM_ID: string;
   APNS_TOPIC: string;
   APNS_PRODUCTION?: string;
-  GITLAB_WEBHOOK_SECRET: string;
+  /** Optional global webhook secret; only used for manually-added webhooks. */
+  GITLAB_WEBHOOK_SECRET?: string;
 }
 
 interface DeviceRecord {
@@ -100,7 +101,23 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
   existing.add(record.deviceToken);
   await env.DEVICES.put(key, JSON.stringify([...existing]));
 
-  return json({ ok: true });
+  // Issue (or reuse) a per-user webhook secret. The app sends this as the
+  // GitLab webhook token when auto-installing hooks; we use it to authenticate
+  // and scope incoming webhooks to this host without a single shared secret.
+  const secretKey = `usersecret:${normalizeHost(record.gitlabHost)}:${record.gitlabUserId}`;
+  let secret = await env.DEVICES.get(secretKey);
+  if (!secret) {
+    secret = crypto.randomUUID().replace(/-/g, '');
+    await env.DEVICES.put(secretKey, secret);
+    await env.DEVICES.put(
+      `secret:${secret}`,
+      JSON.stringify({ host: normalizeHost(record.gitlabHost), userId: record.gitlabUserId })
+    );
+  }
+
+  const url = new URL(request.url);
+  const webhookURL = `${url.origin}/webhook`;
+  return json({ ok: true, webhookSecret: secret, webhookURL });
 }
 
 async function handleUnregister(request: Request, env: Env): Promise<Response> {
@@ -122,13 +139,23 @@ async function handleUnregister(request: Request, env: Env): Promise<Response> {
 // MARK: - Webhook handling
 
 async function handleWebhook(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const token = request.headers.get('X-Gitlab-Token');
-  if (!env.GITLAB_WEBHOOK_SECRET || token !== env.GITLAB_WEBHOOK_SECRET) {
+  const token = request.headers.get('X-Gitlab-Token') ?? '';
+
+  // Preferred: per-user secret issued at /register. It both authenticates the
+  // webhook and tells us which host it belongs to.
+  let host: string | null = null;
+  const scopeRaw = token ? await env.DEVICES.get(`secret:${token}`) : null;
+  if (scopeRaw) {
+    host = (JSON.parse(scopeRaw) as { host: string }).host;
+  } else if (env.GITLAB_WEBHOOK_SECRET && token === env.GITLAB_WEBHOOK_SECRET) {
+    // Backward-compatible global secret: infer host from the payload.
+    host = null; // resolved below
+  } else {
     return json({ error: 'Invalid webhook token' }, 401);
   }
 
   const payload = (await request.json()) as any;
-  const host = inferHost(payload);
+  if (!host) host = inferHost(payload);
   const routed = routeEvent(payload, host);
   if (!routed) return json({ ok: true, skipped: true });
 

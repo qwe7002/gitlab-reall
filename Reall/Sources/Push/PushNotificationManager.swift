@@ -12,6 +12,10 @@ final class PushNotificationManager {
     private(set) var deviceToken: String?
     private(set) var lastError: String?
 
+    /// Per-user secret issued by the Worker, used as the GitLab webhook token
+    /// when auto-installing hooks. Persisted in the Keychain.
+    private(set) var webhookSecret: String? = KeychainStore.get("push.webhookSecret")
+
     /// Cached so we can (re)register with the Worker once the APNs token arrives.
     private var pendingHost: URL?
     private var pendingUser: GitLabUser?
@@ -78,15 +82,31 @@ final class PushNotificationManager {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONEncoder().encode(payload)
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                 lastError = "Worker registration failed (HTTP \(http.statusCode))."
             } else {
                 lastError = nil
+                if let body = try? JSONDecoder().decode(RegistrationResponse.self, from: data),
+                   let secret = body.webhookSecret {
+                    webhookSecret = secret
+                    KeychainStore.set(secret, for: "push.webhookSecret")
+                }
             }
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    /// The Worker's webhook endpoint, derived from the configured Worker URL.
+    var webhookEndpoint: String? {
+        PushConfiguration.workerURL?.appendingPathComponent("webhook").absoluteString
+    }
+
+    /// A `WebhookService` ready to auto-install GitLab hooks, if we have everything.
+    func webhookService(api: GitLabAPI) -> WebhookService? {
+        guard let endpoint = webhookEndpoint, let secret = webhookSecret else { return nil }
+        return WebhookService(api: api, webhookURL: endpoint, secret: secret)
     }
 
     /// Tell the Worker to forget this device (on sign-out / disable).
@@ -97,6 +117,8 @@ final class PushNotificationManager {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONEncoder().encode(["deviceToken": token])
         _ = try? await URLSession.shared.data(for: request)
+        webhookSecret = nil
+        KeychainStore.delete("push.webhookSecret")
     }
 
     private struct RegistrationPayload: Encodable {
@@ -105,5 +127,9 @@ final class PushNotificationManager {
         let gitlabHost: String
         let gitlabUserId: Int
         let gitlabUsername: String
+    }
+
+    private struct RegistrationResponse: Decodable {
+        let webhookSecret: String?
     }
 }

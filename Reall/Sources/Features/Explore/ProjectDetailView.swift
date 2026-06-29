@@ -7,9 +7,23 @@ struct ProjectDetailView: View {
     @State private var readme: String?
     @State private var loadingReadme = true
 
+    @State private var hookInstalled: Bool?
+    @State private var hookBusy = false
+
     var body: some View {
         List {
             Section { headerCard }
+
+            if session.pushManager.webhookSecret != nil {
+                Section {
+                    Toggle(isOn: hookToggleBinding) {
+                        Label("Push notifications", systemImage: "bell.badge")
+                    }
+                    .disabled(hookBusy || hookInstalled == nil)
+                } footer: {
+                    Text("Installs a GitLab webhook on this project so you get CI and review pushes for it.")
+                }
+            }
 
             Section {
                 NavigationLink(value: Route.pipelines(project)) {
@@ -52,6 +66,37 @@ struct ProjectDetailView: View {
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadReadme() }
+        .task { await loadHookState() }
+    }
+
+    private var hookToggleBinding: Binding<Bool> {
+        Binding(
+            get: { hookInstalled ?? false },
+            set: { newValue in Task { await setHook(newValue) } }
+        )
+    }
+
+    private func loadHookState() async {
+        guard let api = session.api, let service = session.pushManager.webhookService(api: api) else { return }
+        hookInstalled = await service.isInstalled(projectId: project.id)
+    }
+
+    private func setHook(_ enabled: Bool) async {
+        guard let api = session.api, let service = session.pushManager.webhookService(api: api) else { return }
+        hookBusy = true
+        defer { hookBusy = false }
+        do {
+            if enabled {
+                try await service.ensureHook(projectId: project.id)
+                hookInstalled = true
+            } else {
+                try await service.removeHook(projectId: project.id)
+                hookInstalled = false
+            }
+        } catch {
+            // Revert the toggle on failure (e.g. insufficient permission).
+            hookInstalled = !enabled
+        }
     }
 
     private var headerCard: some View {

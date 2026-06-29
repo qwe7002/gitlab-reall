@@ -283,6 +283,33 @@ final class GitLabAPI {
         let (data, _) = try await perform(request)
         return try decode(GitLabPipeline.self, from: data)
     }
+
+    // MARK: - Webhooks (used to auto-register push)
+
+    func projectHooks(projectId: Int) async throws -> [GitLabProjectHook] {
+        try await getObject([GitLabProjectHook].self, path: "projects/\(projectId)/hooks")
+    }
+
+    @discardableResult
+    func createProjectHook(projectId: Int, options: WebhookEventOptions) async throws -> GitLabProjectHook {
+        let body = try JSONEncoder().encode(options)
+        let request = try makeRequest(path: "projects/\(projectId)/hooks", method: "POST", body: body)
+        let (data, _) = try await perform(request)
+        return try decode(GitLabProjectHook.self, from: data)
+    }
+
+    @discardableResult
+    func updateProjectHook(projectId: Int, hookId: Int, options: WebhookEventOptions) async throws -> GitLabProjectHook {
+        let body = try JSONEncoder().encode(options)
+        let request = try makeRequest(path: "projects/\(projectId)/hooks/\(hookId)", method: "PUT", body: body)
+        let (data, _) = try await perform(request)
+        return try decode(GitLabProjectHook.self, from: data)
+    }
+
+    func deleteProjectHook(projectId: Int, hookId: Int) async throws {
+        let request = try makeRequest(path: "projects/\(projectId)/hooks/\(hookId)", method: "DELETE")
+        _ = try await perform(request)
+    }
 }
 
 private struct GitLabErrorBody: Decodable {

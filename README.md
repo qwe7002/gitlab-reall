@@ -24,6 +24,8 @@ notifications, so you can keep an eye on CI without drowning in email.
 - 👤 **Profile & Settings** — your profile, and push-notification configuration.
 - 🔔 **Push notifications via your own Cloudflare Worker** — CI failures, MR
   updates, and comments delivered to your device so you can turn GitLab email off.
+  **Webhook setup is automatic**: the app installs the GitLab webhooks on your
+  projects for you via the API (one tap for all projects, or per-project toggle).
 
 ## Project layout
 
@@ -75,8 +77,14 @@ Then in Xcode:
 ## Push notifications
 
 See [`cloudflare-worker/README.md`](cloudflare-worker/README.md) for deploying
-the Worker, configuring APNs, and adding the GitLab webhook. Once deployed,
-enable push and paste your Worker URL in **Profile → Settings → Notifications**.
+the Worker and configuring APNs. Once deployed, enable push and paste your
+Worker URL in **Profile → Settings → Notifications**, then tap **Install on all
+my projects**.
+
+You don't add GitLab webhooks by hand: on registration the Worker issues a
+per-user secret, and the app uses the GitLab API to create the webhooks
+(authenticated with that secret) on your projects. Individual projects can also
+be toggled from their detail page.
 
 ## Creating a Personal Access Token
 
