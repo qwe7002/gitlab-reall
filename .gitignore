@@ -1,0 +1,28 @@
+# Xcode / project
+*.xcodeproj
+*.xcworkspace
+!default.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+*.moved-aside
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Cloudflare Worker
+cloudflare-worker/node_modules/
+cloudflare-worker/.wrangler/
+cloudflare-worker/dist/
+npm-debug.log*
+
+# Secrets
+*.p8
+.dev.vars
+.env
+/.idea/.gitignore
+/.idea/gitlab-reall.iml
+/.idea/modules.xml
+/.idea/vcs.xml
