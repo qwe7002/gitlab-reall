@@ -22,3 +22,7 @@ npm-debug.log*
 *.p8
 .dev.vars
 .env
+/.idea/.gitignore
+/.idea/gitlab-reall.iml
+/.idea/modules.xml
+/.idea/vcs.xml

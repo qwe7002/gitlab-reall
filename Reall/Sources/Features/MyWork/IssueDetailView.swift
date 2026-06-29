@@ -77,7 +77,13 @@ struct IssueDetailView: View {
 struct CommentBubble: View {
     let author: GitLabUser?
     let date: Date?
-    let body: String
+    let markdown: String
+
+    init(author: GitLabUser?, date: Date?, body: String) {
+        self.author = author
+        self.date = date
+        self.markdown = body
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -87,7 +93,7 @@ struct CommentBubble: View {
                 Spacer()
                 RelativeDateText(date: date).font(.caption).foregroundStyle(.secondary)
             }
-            MarkdownText(body)
+            MarkdownText(markdown)
                 .font(.subheadline)
         }
         .padding(12)
