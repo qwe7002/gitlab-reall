@@ -3,7 +3,7 @@ import SwiftUI
 /// GitHub-app style bottom tab bar.
 struct MainTabView: View {
     enum Tab: Hashable {
-        case home, myWork, ci, explore, profile
+        case home, inbox, ci, explore, profile
     }
 
     @State private var selection: Tab = .home
@@ -14,9 +14,9 @@ struct MainTabView: View {
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(Tab.home)
 
-            MyWorkView()
-                .tabItem { Label("My Work", systemImage: "tray.full.fill") }
-                .tag(Tab.myWork)
+            InboxView()
+                .tabItem { Label("Inbox", systemImage: "tray.full.fill") }
+                .tag(Tab.inbox)
 
             CIDashboardView()
                 .tabItem { Label("CI", systemImage: "bolt.horizontal.fill") }

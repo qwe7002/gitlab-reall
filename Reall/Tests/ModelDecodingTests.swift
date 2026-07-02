@@ -71,6 +71,54 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(mr.displayState, .draft)
     }
 
+    func testDecodeTodoWithMergeRequestTarget() throws {
+        let json = """
+        {
+          "id": 102,
+          "action_name": "marked",
+          "target_type": "MergeRequest",
+          "target_url": "https://gitlab.com/qwe7002/servercase/-/merge_requests/9",
+          "body": "feat(probe): bake the installer into the binary",
+          "state": "pending",
+          "created_at": "2026-06-29T04:00:00.000Z",
+          "project": {
+            "id": 7,
+            "name": "servercase",
+            "name_with_namespace": "qwe7002 / servercase",
+            "path_with_namespace": "qwe7002/servercase"
+          },
+          "target": {
+            "id": 900, "iid": 9, "project_id": 7,
+            "title": "Bake the installer into the binary",
+            "state": "opened", "labels": []
+          }
+        }
+        """.data(using: .utf8)!
+        let todo = try makeDecoder().decode(GitLabTodo.self, from: json)
+        XCTAssertTrue(todo.isUnread)
+        XCTAssertEqual(todo.reference, "qwe7002/servercase #9")
+        XCTAssertEqual(todo.title, "Bake the installer into the binary")
+        XCTAssertNotNil(todo.mergeRequest)
+        XCTAssertNil(todo.issue)
+        if case .mergeRequest = todo.route {} else { XCTFail("expected merge request route") }
+    }
+
+    func testDecodeTodoTolueratesUnknownTarget() throws {
+        // A target shape we can't model shouldn't drop the whole row.
+        let json = """
+        {
+          "id": 5, "action_name": "mentioned",
+          "target_type": "DesignManagement::Design",
+          "state": "pending",
+          "project": { "id": 1, "path_with_namespace": "qwe7002/x" },
+          "target": { "unexpected": true }
+        }
+        """.data(using: .utf8)!
+        let todo = try makeDecoder().decode(GitLabTodo.self, from: json)
+        XCTAssertNil(todo.route)
+        XCTAssertEqual(todo.reference, "qwe7002/x")
+    }
+
     func testCIStatusMapping() {
         XCTAssertEqual(CIStatus("success"), .success)
         XCTAssertTrue(CIStatus("running").isActive)

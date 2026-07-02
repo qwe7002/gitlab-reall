@@ -141,6 +141,16 @@ final class GitLabAPI {
         try await getPage(GitLabEvent.self, path: "events", page: page)
     }
 
+    // MARK: - Inbox (to-dos)
+
+    /// The signed-in user's to-do list — GitLab's equivalent of a notification
+    /// inbox. Pass `state` ("pending" or "done") to filter.
+    func todos(state: String? = nil, page: Int = 1) async throws -> Page<GitLabTodo> {
+        var query: [URLQueryItem] = []
+        if let state { query.append(URLQueryItem(name: "state", value: state)) }
+        return try await getPage(GitLabTodo.self, path: "todos", query: query, page: page)
+    }
+
     // MARK: - Projects
 
     func myProjects(page: Int = 1, search: String? = nil) async throws -> Page<GitLabProject> {
