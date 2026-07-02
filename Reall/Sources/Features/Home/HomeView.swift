@@ -3,17 +3,41 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppSession.self) private var session
     @State private var loader: PaginatedLoader<GitLabEvent>?
+    @State private var showingProfile = false
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let loader {
-                    content(loader)
-                } else {
-                    ProgressView()
+            List {
+                Section("My Work") {
+                    NavigationLink { MyIssuesScreen() } label: {
+                        DashboardLabel("Issues", systemImage: "smallcircle.filled.circle", color: .green)
+                    }
+                    NavigationLink { MyMergeRequestsScreen() } label: {
+                        DashboardLabel("Merge Requests", systemImage: "arrow.triangle.pull", color: .blue)
+                    }
+                    NavigationLink { CIDashboardView() } label: {
+                        DashboardLabel("Pipelines", systemImage: "bolt.horizontal.fill", color: .orange)
+                    }
+                }
+
+                Section("Recent activity") {
+                    activitySection
                 }
             }
             .navigationTitle("Home")
+            .navigationDestination(for: Route.self) { $0.destination }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingProfile = true } label: {
+                        AvatarView(url: session.currentUser?.avatarURL,
+                                   fallbackText: session.currentUser?.displayName ?? "?",
+                                   size: 30)
+                    }
+                    .accessibilityLabel("Profile")
+                }
+            }
+            .refreshable { await loader?.reload() }
+            .sheet(isPresented: $showingProfile) { ProfileView() }
         }
         .task {
             guard loader == nil, let api = session.api else { return }
@@ -24,18 +48,9 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func content(_ loader: PaginatedLoader<GitLabEvent>) -> some View {
-        switch loader.phase {
-        case .loading where loader.items.isEmpty:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .failed(let message) where loader.items.isEmpty:
-            MessageStateView(systemImage: "wifi.exclamationmark",
-                             title: "Couldn't load activity",
-                             message: message) {
-                Task { await loader.reload() }
-            }
-        default:
-            List {
+    private var activitySection: some View {
+        if let loader {
+            if !loader.items.isEmpty {
                 ForEach(loader.items) { event in
                     EventRow(event: event, host: session.api?.host)
                         .task { await loader.loadMoreIfNeeded(currentItem: event) }
@@ -43,16 +58,46 @@ struct HomeView: View {
                 if loader.isLoadingMore {
                     ProgressView().frame(maxWidth: .infinity)
                 }
-            }
-            .listStyle(.plain)
-            .refreshable { await loader.reload() }
-            .overlay {
-                if loader.items.isEmpty {
-                    MessageStateView(systemImage: "clock.arrow.circlepath",
-                                     title: "No recent activity",
-                                     message: "Your GitLab activity will show up here.")
+            } else {
+                switch loader.phase {
+                case .idle, .loading:
+                    ProgressView().frame(maxWidth: .infinity)
+                case .failed(let message):
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
+                case .loaded:
+                    Text("Your GitLab activity will show up here.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
+        } else {
+            ProgressView().frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// A list row with a rounded, colour-filled icon tile, GitHub dashboard style.
+struct DashboardLabel: View {
+    let title: String
+    let systemImage: String
+    let color: Color
+
+    init(_ title: String, systemImage: String, color: Color) {
+        self.title = title
+        self.systemImage = systemImage
+        self.color = color
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(color)
+                .frame(width: 30, height: 30)
+                .overlay {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            Text(title)
         }
     }
 }

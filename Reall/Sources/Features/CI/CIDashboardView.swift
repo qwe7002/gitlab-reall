@@ -7,26 +7,24 @@ struct CIDashboardView: View {
     @State private var loader: PaginatedLoader<GitLabProject>?
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let loader {
-                    PagedListView(
-                        loader: loader,
-                        emptyTitle: "No projects",
-                        emptyMessage: "Projects you're a member of will appear here.",
-                        emptyImage: "bolt.horizontal"
-                    ) { project in
-                        NavigationLink(value: Route.pipelines(project)) {
-                            CIProjectRow(project: project)
-                        }
+        Group {
+            if let loader {
+                PagedListView(
+                    loader: loader,
+                    emptyTitle: "No projects",
+                    emptyMessage: "Projects you're a member of will appear here.",
+                    emptyImage: "bolt.horizontal"
+                ) { project in
+                    NavigationLink(value: Route.pipelines(project)) {
+                        CIProjectRow(project: project)
                     }
-                } else {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationTitle("CI / CD")
-            .navigationDestination(for: Route.self) { $0.destination }
         }
+        .navigationTitle("Pipelines")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             guard loader == nil, let api = session.api else { return }
             let l = PaginatedLoader<GitLabProject> { try await api.myProjects(page: $0) }
