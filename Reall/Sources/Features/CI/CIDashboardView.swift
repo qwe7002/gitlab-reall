@@ -15,7 +15,9 @@ struct CIDashboardView: View {
                     emptyMessage: "Projects you're a member of will appear here.",
                     emptyImage: "bolt.horizontal"
                 ) { project in
-                    NavigationLink(value: Route.pipelines(project)) {
+                    NavigationLink {
+                        ProjectPipelinesView(project: project)
+                    } label: {
                         CIProjectRow(project: project)
                     }
                 }

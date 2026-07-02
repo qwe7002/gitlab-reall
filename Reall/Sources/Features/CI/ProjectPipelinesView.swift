@@ -14,9 +14,11 @@ struct ProjectPipelinesView: View {
                     emptyMessage: "This project hasn't run any pipelines yet.",
                     emptyImage: "bolt.slash"
                 ) { pipeline in
-                    NavigationLink(value: Route.pipeline(projectId: project.id,
-                                                          pipeline: pipeline,
-                                                          projectName: project.nameWithNamespace)) {
+                    NavigationLink {
+                        PipelineDetailView(projectId: project.id,
+                                           pipeline: pipeline,
+                                           projectName: project.nameWithNamespace)
+                    } label: {
                         PipelineRow(pipeline: pipeline)
                     }
                 }
