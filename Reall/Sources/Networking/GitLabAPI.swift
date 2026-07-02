@@ -219,6 +219,29 @@ final class GitLabAPI {
         return try decode(GitLabGroup.self, from: data)
     }
 
+    // MARK: - Groups
+
+    /// Groups the signed-in user is a member of.
+    func groups(page: Int = 1, search: String? = nil) async throws -> Page<GitLabGroup> {
+        var query = [
+            URLQueryItem(name: "min_access_level", value: "10"),
+            URLQueryItem(name: "order_by", value: "name"),
+            URLQueryItem(name: "sort", value: "asc")
+        ]
+        if let search, !search.isEmpty { query.append(URLQueryItem(name: "search", value: search)) }
+        return try await getPage(GitLabGroup.self, path: "groups", query: query, page: page)
+    }
+
+    /// Projects that belong to a group.
+    func groupProjects(groupId: Int, page: Int = 1) async throws -> Page<GitLabProject> {
+        let query = [
+            URLQueryItem(name: "order_by", value: "last_activity_at"),
+            URLQueryItem(name: "simple", value: "true"),
+            URLQueryItem(name: "include_subgroups", value: "true")
+        ]
+        return try await getPage(GitLabProject.self, path: "groups/\(groupId)/projects", query: query, page: page)
+    }
+
     func readme(projectId: Int, ref: String, path: String = "README.md") async throws -> GitLabRepositoryFile {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path

@@ -24,6 +24,15 @@ struct HomeView: View {
                     }
                 }
 
+                Section("Browse") {
+                    NavigationLink { ProjectsScreen() } label: {
+                        DashboardLabel("Projects", systemImage: "folder.fill", color: .indigo)
+                    }
+                    NavigationLink { GroupsScreen() } label: {
+                        DashboardLabel("Groups", systemImage: "person.3.fill", color: .teal)
+                    }
+                }
+
                 Section("Recent activity") {
                     activitySection
                 }
@@ -289,17 +298,26 @@ struct NewIssueView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
 
-    @State private var projectId = ""
+    /// A project can be pre-selected (e.g. when creating from a project page).
+    let initialProject: GitLabProject?
+
+    @State private var projects: [GitLabProject] = []
+    @State private var selectedProjectId: Int?
+    @State private var loadingProjects = true
     @State private var title = ""
     @State private var description = ""
     @State private var isCreating = false
     @State private var errorMessage: String?
 
+    init(project: GitLabProject? = nil) {
+        self.initialProject = project
+        _selectedProjectId = State(initialValue: project?.id)
+    }
+
     var body: some View {
         Form {
             Section {
-                TextField("Project ID", text: $projectId)
-                    .keyboardType(.numberPad)
+                projectPicker
                 TextField("Title", text: $title)
                 TextEditor(text: $description)
                     .frame(minHeight: 120)
@@ -310,36 +328,66 @@ struct NewIssueView: View {
         }
         .navigationTitle("New Issue")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { formToolbar(createTitle: "Create", canSubmit: canSubmit, action: create) }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                if isCreating {
+                    ProgressView()
+                } else {
+                    Button("Create") { Task { await create() } }
+                        .disabled(!canSubmit)
+                }
+            }
+        }
+        .task { await loadProjects() }
+    }
+
+    @ViewBuilder
+    private var projectPicker: some View {
+        if loadingProjects && projects.isEmpty {
+            HStack {
+                Text("Project")
+                Spacer()
+                ProgressView()
+            }
+        } else if projects.isEmpty {
+            Text("No projects available").foregroundStyle(.secondary)
+        } else {
+            Picker("Project", selection: $selectedProjectId) {
+                Text("Select a project").tag(Int?.none)
+                ForEach(projects) { project in
+                    Text(project.nameWithNamespace).tag(Int?.some(project.id))
+                }
+            }
+        }
     }
 
     private var canSubmit: Bool {
-        Int(projectId) != nil && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCreating
+        selectedProjectId != nil
+            && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isCreating
+    }
+
+    private func loadProjects() async {
+        guard let api = session.api else { return }
+        loadingProjects = true
+        defer { loadingProjects = false }
+        var loaded = (try? await api.myProjects(page: 1).items) ?? []
+        // Make sure a pre-selected project is always present in the list.
+        if let initialProject, !loaded.contains(where: { $0.id == initialProject.id }) {
+            loaded.insert(initialProject, at: 0)
+        }
+        projects = loaded
     }
 
     private func create() async {
-        guard let api = session.api, let id = Int(projectId) else { return }
-        await runCreate {
-            _ = try await api.createIssue(projectId: id,
-                                          title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                                          description: cleaned(description))
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func formToolbar(createTitle: String, canSubmit: Bool, action: @escaping () async -> Void) -> some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-        ToolbarItem(placement: .confirmationAction) {
-            Button(createTitle) { Task { await action() } }
-                .disabled(!canSubmit)
-        }
-    }
-
-    private func runCreate(_ action: () async throws -> Void) async {
+        guard let api = session.api, let id = selectedProjectId else { return }
         isCreating = true
         defer { isCreating = false }
         do {
-            try await action()
+            _ = try await api.createIssue(projectId: id,
+                                          title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                          description: cleaned(description))
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
