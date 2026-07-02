@@ -151,6 +151,18 @@ final class GitLabAPI {
         return try await getPage(GitLabTodo.self, path: "todos", query: query, page: page)
     }
 
+    // MARK: - Snippets
+
+    func snippets(page: Int = 1) async throws -> Page<GitLabSnippet> {
+        try await getPage(GitLabSnippet.self, path: "snippets", page: page)
+    }
+
+    func snippetRaw(id: Int) async throws -> String {
+        let request = try makeRequest(path: "snippets/\(id)/raw")
+        let (data, _) = try await perform(request)
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
     // MARK: - Projects
 
     func myProjects(page: Int = 1, search: String? = nil) async throws -> Page<GitLabProject> {
@@ -185,6 +197,28 @@ final class GitLabAPI {
         try await getObject(GitLabProject.self, path: "projects/\(id)")
     }
 
+    @discardableResult
+    func createProject(name: String, path: String, description: String?, visibility: String) async throws -> GitLabProject {
+        let body = try JSONEncoder().encode(CreateProjectRequest(name: name,
+                                                                  path: path,
+                                                                  description: description,
+                                                                  visibility: visibility))
+        let request = try makeRequest(path: "projects", method: "POST", body: body)
+        let (data, _) = try await perform(request)
+        return try decode(GitLabProject.self, from: data)
+    }
+
+    @discardableResult
+    func createGroup(name: String, path: String, description: String?, visibility: String) async throws -> GitLabGroup {
+        let body = try JSONEncoder().encode(CreateGroupRequest(name: name,
+                                                               path: path,
+                                                               description: description,
+                                                               visibility: visibility))
+        let request = try makeRequest(path: "groups", method: "POST", body: body)
+        let (data, _) = try await perform(request)
+        return try decode(GitLabGroup.self, from: data)
+    }
+
     func readme(projectId: Int, ref: String, path: String = "README.md") async throws -> GitLabRepositoryFile {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path
@@ -213,11 +247,35 @@ final class GitLabAPI {
         return try await getPage(GitLabIssue.self, path: "projects/\(projectId)/issues", query: query, page: page)
     }
 
+    @discardableResult
+    func createIssue(projectId: Int, title: String, description: String?) async throws -> GitLabIssue {
+        let body = try JSONEncoder().encode(CreateIssueRequest(title: title, description: description))
+        let request = try makeRequest(path: "projects/\(projectId)/issues", method: "POST", body: body)
+        let (data, _) = try await perform(request)
+        return try decode(GitLabIssue.self, from: data)
+    }
+
     func issueNotes(projectId: Int, issueIID: Int, page: Int = 1) async throws -> Page<GitLabNote> {
         let query = [URLQueryItem(name: "sort", value: "asc"), URLQueryItem(name: "order_by", value: "created_at")]
         return try await getPage(GitLabNote.self,
                                  path: "projects/\(projectId)/issues/\(issueIID)/notes",
                                  query: query, page: page, perPage: 50)
+    }
+
+    @discardableResult
+    func createIssueNote(projectId: Int, issueIID: Int, body: String) async throws -> GitLabNote {
+        let body = try JSONEncoder().encode(CreateNoteRequest(body: body))
+        let request = try makeRequest(path: "projects/\(projectId)/issues/\(issueIID)/notes", method: "POST", body: body)
+        let (data, _) = try await perform(request)
+        return try decode(GitLabNote.self, from: data)
+    }
+
+    @discardableResult
+    func updateIssueState(projectId: Int, issueIID: Int, stateEvent: IssueStateEvent) async throws -> GitLabIssue {
+        let body = try JSONEncoder().encode(UpdateIssueStateRequest(stateEvent: stateEvent.rawValue))
+        let request = try makeRequest(path: "projects/\(projectId)/issues/\(issueIID)", method: "PUT", body: body)
+        let (data, _) = try await perform(request)
+        return try decode(GitLabIssue.self, from: data)
     }
 
     // MARK: - Merge requests
@@ -319,6 +377,42 @@ final class GitLabAPI {
     func deleteProjectHook(projectId: Int, hookId: Int) async throws {
         let request = try makeRequest(path: "projects/\(projectId)/hooks/\(hookId)", method: "DELETE")
         _ = try await perform(request)
+    }
+}
+
+enum IssueStateEvent: String {
+    case close
+    case reopen
+}
+
+private struct CreateProjectRequest: Encodable {
+    let name: String
+    let path: String
+    let description: String?
+    let visibility: String
+}
+
+private struct CreateGroupRequest: Encodable {
+    let name: String
+    let path: String
+    let description: String?
+    let visibility: String
+}
+
+private struct CreateIssueRequest: Encodable {
+    let title: String
+    let description: String?
+}
+
+private struct CreateNoteRequest: Encodable {
+    let body: String
+}
+
+private struct UpdateIssueStateRequest: Encodable {
+    let stateEvent: String
+
+    enum CodingKeys: String, CodingKey {
+        case stateEvent = "state_event"
     }
 }
 

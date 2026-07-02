@@ -4,6 +4,7 @@ struct HomeView: View {
     @Environment(AppSession.self) private var session
     @State private var loader: PaginatedLoader<GitLabEvent>?
     @State private var showingProfile = false
+    @State private var createSheet: HomeCreateSheet?
 
     var body: some View {
         NavigationStack {
@@ -17,6 +18,9 @@ struct HomeView: View {
                     }
                     NavigationLink { CIDashboardView() } label: {
                         DashboardLabel("Pipelines", systemImage: "bolt.horizontal.fill", color: .orange)
+                    }
+                    NavigationLink { SnippetsScreen() } label: {
+                        DashboardLabel("Snippets", systemImage: "curlybraces", color: .purple)
                     }
                 }
 
@@ -35,9 +39,37 @@ struct HomeView: View {
                     }
                     .accessibilityLabel("Profile")
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { createSheet = .issue } label: {
+                            Label("New Issue", systemImage: "smallcircle.filled.circle")
+                        }
+                        Button { createSheet = .project } label: {
+                            Label("New Project", systemImage: "folder.badge.plus")
+                        }
+                        Button { createSheet = .group } label: {
+                            Label("New Group", systemImage: "person.3.fill")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Create")
+                }
             }
             .refreshable { await loader?.reload() }
             .sheet(isPresented: $showingProfile) { ProfileView() }
+            .sheet(item: $createSheet) { sheet in
+                NavigationStack {
+                    switch sheet {
+                    case .issue:
+                        NewIssueView()
+                    case .project:
+                        NewProjectView()
+                    case .group:
+                        NewGroupView()
+                    }
+                }
+            }
         }
         .task {
             guard loader == nil, let api = session.api else { return }
@@ -51,12 +83,8 @@ struct HomeView: View {
     private var activitySection: some View {
         if let loader {
             if !loader.items.isEmpty {
-                ForEach(loader.items) { event in
+                ForEach(Array(loader.items.prefix(5))) { event in
                     EventRow(event: event, host: session.api?.host)
-                        .task { await loader.loadMoreIfNeeded(currentItem: event) }
-                }
-                if loader.isLoadingMore {
-                    ProgressView().frame(maxWidth: .infinity)
                 }
             } else {
                 switch loader.phase {
@@ -73,6 +101,11 @@ struct HomeView: View {
             ProgressView().frame(maxWidth: .infinity)
         }
     }
+}
+
+private enum HomeCreateSheet: String, Identifiable {
+    case issue, project, group
+    var id: String { rawValue }
 }
 
 struct MyIssuesScreen: View {
@@ -127,6 +160,330 @@ struct MyMergeRequestsScreen: View {
             await l.loadFirstIfNeeded()
         }
     }
+}
+
+struct SnippetsScreen: View {
+    @Environment(AppSession.self) private var session
+    @State private var loader: PaginatedLoader<GitLabSnippet>?
+
+    var body: some View {
+        Group {
+            if let loader {
+                PagedListView(loader: loader,
+                              emptyTitle: "No snippets",
+                              emptyMessage: "Snippets you can access will appear here.",
+                              emptyImage: "curlybraces") { snippet in
+                    NavigationLink {
+                        SnippetDetailView(snippet: snippet)
+                    } label: {
+                        SnippetRow(snippet: snippet)
+                    }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationTitle("Snippets")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard loader == nil, let api = session.api else { return }
+            let l = PaginatedLoader<GitLabSnippet> { try await api.snippets(page: $0) }
+            loader = l
+            await l.loadFirstIfNeeded()
+        }
+    }
+}
+
+struct SnippetRow: View {
+    let snippet: GitLabSnippet
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "curlybraces")
+                .foregroundStyle(.purple)
+                .font(.title3)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(snippet.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                if let description = snippet.description, !description.isEmpty {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                HStack(spacing: 8) {
+                    if let fileName = snippet.fileName {
+                        Text(fileName).monospaced()
+                    }
+                    if let updatedAt = snippet.updatedAt ?? snippet.createdAt {
+                        RelativeDateText(date: updatedAt, prefix: "updated ")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct SnippetDetailView: View {
+    @Environment(AppSession.self) private var session
+    let snippet: GitLabSnippet
+
+    @State private var rawText: String?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(snippet.title)
+                    .font(.title3.bold())
+                if let description = snippet.description, !description.isEmpty {
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Divider()
+                if isLoading {
+                    ProgressView().frame(maxWidth: .infinity)
+                } else if let rawText {
+                    Text(rawText)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let errorMessage {
+                    Text(errorMessage).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Snippet")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let url = snippet.webURL {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Link(destination: url) { Image(systemName: "safari") }
+                }
+            }
+        }
+        .task { await loadRawText() }
+    }
+
+    private func loadRawText() async {
+        guard let api = session.api else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            rawText = try await api.snippetRaw(id: snippet.id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct NewIssueView: View {
+    @Environment(AppSession.self) private var session
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var projectId = ""
+    @State private var title = ""
+    @State private var description = ""
+    @State private var isCreating = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Project ID", text: $projectId)
+                    .keyboardType(.numberPad)
+                TextField("Title", text: $title)
+                TextEditor(text: $description)
+                    .frame(minHeight: 120)
+            }
+            if let errorMessage {
+                Section { Text(errorMessage).foregroundStyle(.red) }
+            }
+        }
+        .navigationTitle("New Issue")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { formToolbar(createTitle: "Create", canSubmit: canSubmit, action: create) }
+    }
+
+    private var canSubmit: Bool {
+        Int(projectId) != nil && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCreating
+    }
+
+    private func create() async {
+        guard let api = session.api, let id = Int(projectId) else { return }
+        await runCreate {
+            _ = try await api.createIssue(projectId: id,
+                                          title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                          description: cleaned(description))
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func formToolbar(createTitle: String, canSubmit: Bool, action: @escaping () async -> Void) -> some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        ToolbarItem(placement: .confirmationAction) {
+            Button(createTitle) { Task { await action() } }
+                .disabled(!canSubmit)
+        }
+    }
+
+    private func runCreate(_ action: () async throws -> Void) async {
+        isCreating = true
+        defer { isCreating = false }
+        do {
+            try await action()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct NewProjectView: View {
+    @Environment(AppSession.self) private var session
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name = ""
+    @State private var path = ""
+    @State private var description = ""
+    @State private var visibility = "private"
+    @State private var isCreating = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Name", text: $name)
+                TextField("Path", text: $path)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextEditor(text: $description)
+                    .frame(minHeight: 96)
+                Picker("Visibility", selection: $visibility) {
+                    Text("Private").tag("private")
+                    Text("Internal").tag("internal")
+                    Text("Public").tag("public")
+                }
+            }
+            if let errorMessage {
+                Section { Text(errorMessage).foregroundStyle(.red) }
+            }
+        }
+        .navigationTitle("New Project")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Create") { Task { await create() } }
+                    .disabled(!canSubmit)
+            }
+        }
+        .onChange(of: name) { _, newValue in
+            if path.isEmpty { path = suggestedPath(from: newValue) }
+        }
+    }
+
+    private var canSubmit: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCreating
+    }
+
+    private func create() async {
+        guard let api = session.api else { return }
+        isCreating = true
+        defer { isCreating = false }
+        do {
+            _ = try await api.createProject(name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                                            path: path.trimmingCharacters(in: .whitespacesAndNewlines),
+                                            description: cleaned(description),
+                                            visibility: visibility)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct NewGroupView: View {
+    @Environment(AppSession.self) private var session
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name = ""
+    @State private var path = ""
+    @State private var description = ""
+    @State private var visibility = "private"
+    @State private var isCreating = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Name", text: $name)
+                TextField("Path", text: $path)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextEditor(text: $description)
+                    .frame(minHeight: 96)
+                Picker("Visibility", selection: $visibility) {
+                    Text("Private").tag("private")
+                    Text("Internal").tag("internal")
+                    Text("Public").tag("public")
+                }
+            }
+            if let errorMessage {
+                Section { Text(errorMessage).foregroundStyle(.red) }
+            }
+        }
+        .navigationTitle("New Group")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Create") { Task { await create() } }
+                    .disabled(!canSubmit)
+            }
+        }
+        .onChange(of: name) { _, newValue in
+            if path.isEmpty { path = suggestedPath(from: newValue) }
+        }
+    }
+
+    private var canSubmit: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCreating
+    }
+
+    private func create() async {
+        guard let api = session.api else { return }
+        isCreating = true
+        defer { isCreating = false }
+        do {
+            _ = try await api.createGroup(name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                                          path: path.trimmingCharacters(in: .whitespacesAndNewlines),
+                                          description: cleaned(description),
+                                          visibility: visibility)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private func cleaned(_ text: String) -> String? {
+    let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return value.isEmpty ? nil : value
+}
+
+private func suggestedPath(from name: String) -> String {
+    name.lowercased()
+        .replacingOccurrences(of: " ", with: "-")
+        .filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == "." }
 }
 
 /// A list row with a rounded, colour-filled icon tile, GitHub dashboard style.
