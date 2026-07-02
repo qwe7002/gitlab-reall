@@ -12,45 +12,37 @@ struct ProjectDetailView: View {
 
     var body: some View {
         List {
-            Section { headerCard }
-
-            if session.pushManager.webhookSecret != nil {
-                Section {
-                    Toggle(isOn: hookToggleBinding) {
-                        Label("Push notifications", systemImage: "bell.badge")
-                    }
-                    .disabled(hookBusy || hookInstalled == nil)
-                } footer: {
-                    Text("Installs a GitLab webhook on this project so you get CI and review pushes for it.")
-                }
+            Section {
+                header
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 8, trailing: 20))
             }
 
             Section {
-                NavigationLink(value: Route.pipelines(project)) {
-                    Label("Pipelines", systemImage: "bolt.horizontal.fill")
-                }
                 NavigationLink {
                     ProjectIssuesView(project: project)
                 } label: {
-                    Label {
-                        HStack {
-                            Text("Issues")
-                            Spacer()
-                            if let count = project.openIssuesCount {
-                                Text("\(count)").foregroundStyle(.secondary)
-                            }
-                        }
-                    } icon: { Image(systemName: "exclamationmark.circle.fill") }
+                    navRow("Issues", systemImage: "smallcircle.filled.circle",
+                           color: .green, count: project.openIssuesCount)
                 }
                 NavigationLink {
                     ProjectMergeRequestsView(project: project)
                 } label: {
-                    Label("Merge Requests", systemImage: "arrow.triangle.pull")
+                    navRow("Merge Requests", systemImage: "arrow.triangle.pull", color: .blue)
                 }
-                if let url = project.webURL {
-                    Link(destination: url) {
-                        Label("Open in browser", systemImage: "safari")
+                NavigationLink(value: Route.pipelines(project)) {
+                    navRow("Pipelines", systemImage: "play.circle.fill", color: .orange)
+                }
+            }
+
+            if session.pushManager.webhookSecret != nil {
+                Section {
+                    Toggle(isOn: hookToggleBinding) {
+                        navRow("Notifications", systemImage: "bell.fill", color: .red)
                     }
+                    .disabled(hookBusy || hookInstalled == nil)
+                } footer: {
+                    Text("Installs a GitLab webhook on this project so you get CI and review pushes for it.")
                 }
             }
 
@@ -99,40 +91,66 @@ struct ProjectDetailView: View {
         }
     }
 
-    private var headerCard: some View {
+    private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                AvatarView(url: project.avatarURL, fallbackText: project.name, size: 48)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(project.nameWithNamespace).font(.headline)
-                    if let visibility = project.visibility {
-                        Label(visibility.capitalized,
-                              systemImage: visibility == "private" ? "lock.fill" : "globe")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+            HStack(spacing: 8) {
+                AvatarView(url: project.avatarURL, fallbackText: project.name, size: 24)
+                Text(namespaceName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if let visibility = project.visibility, visibility != "public" {
+                    Image(systemName: visibility == "private" ? "lock.fill" : "eye.slash.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
+
+            Text(project.name)
+                .font(.largeTitle.bold())
+                .lineLimit(2)
+
             if let description = project.description, !description.isEmpty {
-                Text(description).font(.subheadline).foregroundStyle(.secondary)
+                Text(description)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
             HStack(spacing: 20) {
-                statItem(value: project.starCount, label: "Stars", symbol: "star.fill")
-                statItem(value: project.forksCount, label: "Forks", symbol: "tuningfork")
-                if let issues = project.openIssuesCount {
-                    statItem(value: issues, label: "Issues", symbol: "exclamationmark.circle.fill")
-                }
+                statInline(value: project.starCount, label: "stars", symbol: "star")
+                statInline(value: project.forksCount, label: "forks", symbol: "arrow.triangle.branch")
             }
+            .padding(.top, 2)
+
             if let topics = project.topics, !topics.isEmpty {
                 LabelFlow(labels: topics)
             }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func statItem(value: Int, label: String, symbol: String) -> some View {
-        VStack(spacing: 2) {
-            Label("\(value)", systemImage: symbol).font(.subheadline.weight(.semibold))
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+    /// The owner / group the project lives under.
+    private var namespaceName: String {
+        project.namespace?.name ?? project.nameWithNamespace
+    }
+
+    private func statInline(value: Int, label: String, symbol: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol).foregroundStyle(.secondary)
+            Text("\(value)").fontWeight(.semibold)
+            Text(label).foregroundStyle(.secondary)
+        }
+        .font(.subheadline)
+    }
+
+    /// A navigation row with a rounded colour-filled icon tile and optional count.
+    private func navRow(_ title: String, systemImage: String, color: Color, count: Int? = nil) -> some View {
+        HStack(spacing: 12) {
+            DashboardLabel(title, systemImage: systemImage, color: color)
+            Spacer(minLength: 8)
+            if let count {
+                Text("\(count)").foregroundStyle(.secondary)
+            }
         }
     }
 
