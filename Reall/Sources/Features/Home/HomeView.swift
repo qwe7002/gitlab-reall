@@ -30,18 +30,6 @@ struct HomeView: View {
                     }
                 }
 
-                Section("Create") {
-                    Button { createSheet = .issue } label: {
-                        DashboardLabel("New Issue", systemImage: "smallcircle.filled.circle", color: .green)
-                    }
-                    Button { createSheet = .project } label: {
-                        DashboardLabel("New Project", systemImage: "folder.badge.plus", color: .indigo)
-                    }
-                    Button { createSheet = .group } label: {
-                        DashboardLabel("New Group", systemImage: "person.3.fill", color: .teal)
-                    }
-                }
-
                 Section("Recent activity") {
                     activitySection
                 }
@@ -56,6 +44,22 @@ struct HomeView: View {
                                    size: 30)
                     }
                     .accessibilityLabel("Profile")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { createSheet = .issue } label: {
+                            Label("New Issue", systemImage: "smallcircle.filled.circle")
+                        }
+                        Button { createSheet = .project } label: {
+                            Label("New Project", systemImage: "folder.badge.plus")
+                        }
+                        Button { createSheet = .group } label: {
+                            Label("New Group", systemImage: "person.3.fill")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Create")
                 }
             }
             .refreshable { await loader?.reload() }
@@ -113,6 +117,7 @@ private enum HomeCreateSheet: String, Identifiable {
 struct MyIssuesScreen: View {
     @Environment(AppSession.self) private var session
     @State private var loader: PaginatedLoader<GitLabIssue>?
+    @State private var showingNewIssue = false
 
     var body: some View {
         Group {
@@ -128,6 +133,17 @@ struct MyIssuesScreen: View {
         }
         .navigationTitle("Issues")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showingNewIssue = true } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("New Issue")
+            }
+        }
+        .sheet(isPresented: $showingNewIssue) {
+            NavigationStack { NewIssueView() }
+        }
         .task {
             guard loader == nil, let api = session.api else { return }
             let l = PaginatedLoader<GitLabIssue> { try await api.myIssues(page: $0) }
@@ -167,6 +183,7 @@ struct MyMergeRequestsScreen: View {
 struct ProjectsScreen: View {
     @Environment(AppSession.self) private var session
     @State private var loader: PaginatedLoader<GitLabProject>?
+    @State private var showingNewProject = false
 
     var body: some View {
         Group {
@@ -187,6 +204,17 @@ struct ProjectsScreen: View {
         }
         .navigationTitle("Projects")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showingNewProject = true } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("New Project")
+            }
+        }
+        .sheet(isPresented: $showingNewProject) {
+            NavigationStack { NewProjectView() }
+        }
         .task {
             guard loader == nil, let api = session.api else { return }
             let l = PaginatedLoader<GitLabProject> { try await api.myProjects(page: $0) }
@@ -199,6 +227,7 @@ struct ProjectsScreen: View {
 struct GroupsScreen: View {
     @Environment(AppSession.self) private var session
     @State private var loader: PaginatedLoader<GitLabGroup>?
+    @State private var showingNewGroup = false
 
     var body: some View {
         Group {
@@ -219,6 +248,17 @@ struct GroupsScreen: View {
         }
         .navigationTitle("Groups")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showingNewGroup = true } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("New Group")
+            }
+        }
+        .sheet(isPresented: $showingNewGroup) {
+            NavigationStack { NewGroupView() }
+        }
         .task {
             guard loader == nil, let api = session.api else { return }
             let l = PaginatedLoader<GitLabGroup> { try await api.groups(page: $0) }
