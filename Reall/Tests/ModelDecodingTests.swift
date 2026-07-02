@@ -146,6 +146,33 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(MarkdownParser.parse("---"), [.rule])
     }
 
+    func testMarkdownParserPreservesLineBreaks() {
+        // Single newlines inside a paragraph are kept (issue / PR body style).
+        XCTAssertEqual(MarkdownParser.parse("line one\nline two"),
+                       [.paragraph("line one\nline two")])
+    }
+
+    func testMarkdownParserTable() {
+        let md = """
+        | Name | Age |
+        | --- | --- |
+        | Alice | 30 |
+        | Bob | 25 |
+        """
+        XCTAssertEqual(MarkdownParser.parse(md),
+                       [.table(header: ["Name", "Age"], rows: [["Alice", "30"], ["Bob", "25"]])])
+    }
+
+    func testMarkdownParserBadgeLine() {
+        let md = "[![Build](https://img.example/badge.svg)](https://ci.example.com)"
+        guard case .images(let images)? = MarkdownParser.parse(md).first else {
+            return XCTFail("expected an images block")
+        }
+        XCTAssertEqual(images.count, 1)
+        XCTAssertEqual(images.first?.url.absoluteString, "https://img.example/badge.svg")
+        XCTAssertEqual(images.first?.link?.absoluteString, "https://ci.example.com")
+    }
+
     func testPipelineShortSHA() {
         let json = """
         { "id": 3, "status": "success", "sha": "0123456789abcdef" }
