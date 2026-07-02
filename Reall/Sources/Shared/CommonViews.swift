@@ -120,6 +120,25 @@ struct MessageStateView: View {
     }
 }
 
+/// Lightweight markdown renderer backed by SwiftUI's attributed text support.
+struct MarkdownView: View {
+    let markdown: String
+
+    init(_ markdown: String) {
+        self.markdown = markdown
+    }
+
+    var body: some View {
+        Text(attributedMarkdown)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var attributedMarkdown: AttributedString {
+        (try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(markdown)
+    }
+}
+
 /// Relative date label, e.g. "3h ago".
 struct RelativeDateText: View {
     let date: Date?
