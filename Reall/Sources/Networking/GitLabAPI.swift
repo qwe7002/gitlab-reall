@@ -193,16 +193,32 @@ final class GitLabAPI {
         return try await getPage(GitLabProject.self, path: "projects", query: query, page: page)
     }
 
+    /// Projects filtered by browse scope: "member" (default), "owned" or "starred".
+    func projects(scope: String, search: String? = nil, page: Int = 1) async throws -> Page<GitLabProject> {
+        var query = [
+            URLQueryItem(name: "order_by", value: "last_activity_at"),
+            URLQueryItem(name: "simple", value: "true")
+        ]
+        switch scope {
+        case "owned": query.append(URLQueryItem(name: "owned", value: "true"))
+        case "starred": query.append(URLQueryItem(name: "starred", value: "true"))
+        default: query.append(URLQueryItem(name: "membership", value: "true"))
+        }
+        if let search, !search.isEmpty { query.append(URLQueryItem(name: "search", value: search)) }
+        return try await getPage(GitLabProject.self, path: "projects", query: query, page: page)
+    }
+
     func project(id: Int) async throws -> GitLabProject {
         try await getObject(GitLabProject.self, path: "projects/\(id)")
     }
 
     @discardableResult
-    func createProject(name: String, path: String, description: String?, visibility: String) async throws -> GitLabProject {
+    func createProject(name: String, path: String, description: String?, visibility: String, namespaceId: Int? = nil) async throws -> GitLabProject {
         let body = try JSONEncoder().encode(CreateProjectRequest(name: name,
                                                                   path: path,
                                                                   description: description,
-                                                                  visibility: visibility))
+                                                                  visibility: visibility,
+                                                                  namespaceId: namespaceId))
         let request = try makeRequest(path: "projects", method: "POST", body: body)
         let (data, _) = try await perform(request)
         return try decode(GitLabProject.self, from: data)
@@ -413,6 +429,12 @@ private struct CreateProjectRequest: Encodable {
     let path: String
     let description: String?
     let visibility: String
+    let namespaceId: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case name, path, description, visibility
+        case namespaceId = "namespace_id"
+    }
 }
 
 private struct CreateGroupRequest: Encodable {

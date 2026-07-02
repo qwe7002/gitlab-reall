@@ -1,9 +1,24 @@
 import SwiftUI
 
-/// The projects the signed-in user is a member of, with search.
+/// The signed-in user's projects, filterable by scope and searchable.
 struct ProjectsScreen: View {
+    enum Scope: String, CaseIterable, Identifiable {
+        case member = "Member"
+        case owned = "Owned"
+        case starred = "Starred"
+        var id: String { rawValue }
+        var apiValue: String {
+            switch self {
+            case .member: return "member"
+            case .owned: return "owned"
+            case .starred: return "starred"
+            }
+        }
+    }
+
     @Environment(AppSession.self) private var session
     @State private var loader: PaginatedLoader<GitLabProject>?
+    @State private var scope: Scope = .member
     @State private var query = ""
     @State private var searchTask: Task<Void, Never>?
 
@@ -13,7 +28,7 @@ struct ProjectsScreen: View {
                 PagedListView(
                     loader: loader,
                     emptyTitle: query.isEmpty ? "No projects" : "No results",
-                    emptyMessage: "Projects you're a member of appear here.",
+                    emptyMessage: emptyMessage,
                     emptyImage: "folder"
                 ) { project in
                     NavigationLink(value: Route.project(project)) {
@@ -26,28 +41,45 @@ struct ProjectsScreen: View {
         }
         .navigationTitle("Projects")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Search your projects")
-        .onChange(of: query) { _, newValue in scheduleSearch(newValue) }
-        .task {
-            guard loader == nil, let api = session.api else { return }
-            let l = PaginatedLoader<GitLabProject> { try await api.myProjects(page: $0) }
-            loader = l
-            await l.loadFirstIfNeeded()
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("Scope", selection: $scope) {
+                    ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 280)
+            }
+        }
+        .searchable(text: $query, prompt: "Search projects")
+        .onChange(of: query) { _, _ in scheduleReload() }
+        .task(id: scope) { await reload() }
+    }
+
+    private var emptyMessage: String {
+        switch scope {
+        case .member: return "Projects you're a member of appear here."
+        case .owned: return "Projects you own appear here."
+        case .starred: return "Projects you've starred appear here."
         }
     }
 
-    private func scheduleSearch(_ term: String) {
-        searchTask?.cancel()
+    private func reload() async {
         guard let api = session.api else { return }
-        let trimmed = term.trimmingCharacters(in: .whitespaces)
+        let term = query.trimmingCharacters(in: .whitespaces)
+        let currentScope = scope.apiValue
+        let l = PaginatedLoader<GitLabProject> {
+            try await api.projects(scope: currentScope, search: term.isEmpty ? nil : term, page: $0)
+        }
+        loader = l
+        await l.loadFirstIfNeeded()
+    }
+
+    private func scheduleReload() {
+        searchTask?.cancel()
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
-            let l = PaginatedLoader<GitLabProject> {
-                try await api.myProjects(page: $0, search: trimmed.isEmpty ? nil : trimmed)
-            }
-            loader = l
-            await l.loadFirstIfNeeded()
+            await reload()
         }
     }
 }
@@ -132,6 +164,7 @@ struct GroupDetailView: View {
     @Environment(AppSession.self) private var session
     let group: GitLabGroup
     @State private var loader: PaginatedLoader<GitLabProject>?
+    @State private var showingNewProject = false
 
     var body: some View {
         List {
@@ -148,12 +181,39 @@ struct GroupDetailView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(group.name)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            guard loader == nil, let api = session.api else { return }
-            let l = PaginatedLoader<GitLabProject> { try await api.groupProjects(groupId: group.id, page: $0) }
-            loader = l
-            await l.loadFirstIfNeeded()
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingNewProject = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("New project in group")
+            }
+            if let url = group.webURL {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Link(destination: url) { Image(systemName: "safari") }
+                }
+            }
         }
+        .sheet(isPresented: $showingNewProject) {
+            NavigationStack {
+                NewProjectView(group: group) { _ in
+                    Task { await reload() }
+                }
+            }
+        }
+        .task {
+            guard loader == nil else { return }
+            await reload()
+        }
+    }
+
+    private func reload() async {
+        guard let api = session.api else { return }
+        let l = PaginatedLoader<GitLabProject> { try await api.groupProjects(groupId: group.id, page: $0) }
+        loader = l
+        await l.loadFirstIfNeeded()
     }
 
     private var header: some View {
