@@ -36,11 +36,8 @@ struct JobLogView: View {
         .navigationTitle(job.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            ToolbarItem(placement: .topBarTrailing) {
                 StatusBadge(CIStatus(job.status).label, color: Theme.ciColor(CIStatus(job.status)))
-                if let url = job.webURL {
-                    Link(destination: url) { Image(systemName: "safari") }
-                }
             }
         }
         .task { await load() }

@@ -10,6 +10,12 @@ struct HomeView: View {
         NavigationStack {
             List {
                 Section("My Work") {
+                    NavigationLink { ProjectsScreen() } label: {
+                        DashboardLabel("Projects", systemImage: "folder.fill", color: .indigo)
+                    }
+                    NavigationLink { GroupsScreen() } label: {
+                        DashboardLabel("Groups", systemImage: "person.3.fill", color: .teal)
+                    }
                     NavigationLink { MyIssuesScreen() } label: {
                         DashboardLabel("Issues", systemImage: "smallcircle.filled.circle", color: .green)
                     }
@@ -22,11 +28,17 @@ struct HomeView: View {
                     NavigationLink { SnippetsScreen() } label: {
                         DashboardLabel("Snippets", systemImage: "curlybraces", color: .purple)
                     }
-                    NavigationLink { ProjectsScreen() } label: {
-                        DashboardLabel("Projects", systemImage: "folder.fill", color: .indigo)
+                }
+
+                Section("Create") {
+                    Button { createSheet = .issue } label: {
+                        DashboardLabel("New Issue", systemImage: "smallcircle.filled.circle", color: .green)
                     }
-                    NavigationLink { GroupsScreen() } label: {
-                        DashboardLabel("Groups", systemImage: "person.3.fill", color: .teal)
+                    Button { createSheet = .project } label: {
+                        DashboardLabel("New Project", systemImage: "folder.badge.plus", color: .indigo)
+                    }
+                    Button { createSheet = .group } label: {
+                        DashboardLabel("New Group", systemImage: "person.3.fill", color: .teal)
                     }
                 }
 
@@ -44,22 +56,6 @@ struct HomeView: View {
                                    size: 30)
                     }
                     .accessibilityLabel("Profile")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { createSheet = .issue } label: {
-                            Label("New Issue", systemImage: "smallcircle.filled.circle")
-                        }
-                        Button { createSheet = .project } label: {
-                            Label("New Project", systemImage: "folder.badge.plus")
-                        }
-                        Button { createSheet = .group } label: {
-                            Label("New Group", systemImage: "person.3.fill")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Create")
                 }
             }
             .refreshable { await loader?.reload() }
@@ -256,13 +252,6 @@ struct GroupProjectsScreen: View {
         }
         .navigationTitle(group.name)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let url = group.webURL {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Link(destination: url) { Image(systemName: "safari") }
-                }
-            }
-        }
         .task {
             guard loader == nil, let api = session.api else { return }
             let l = PaginatedLoader<GitLabProject> { try await api.groupProjects(groupId: group.id, page: $0) }
@@ -402,13 +391,6 @@ struct SnippetDetailView: View {
         }
         .navigationTitle("Snippet")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let url = snippet.webURL {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Link(destination: url) { Image(systemName: "safari") }
-                }
-            }
-        }
         .task { await loadRawText() }
     }
 

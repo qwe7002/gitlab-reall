@@ -51,9 +51,6 @@ struct IssueDetailView: View {
                 }
                 .disabled(isChangingState)
 
-                if let url = currentIssue.webURL {
-                    Link(destination: url) { Image(systemName: "safari") }
-                }
             }
         }
         .alert("Issue action failed", isPresented: errorBinding) {

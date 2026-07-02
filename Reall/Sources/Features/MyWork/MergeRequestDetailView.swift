@@ -21,13 +21,6 @@ struct MergeRequestDetailView: View {
         }
         .navigationTitle(mr.reference)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let url = mr.webURL {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Link(destination: url) { Image(systemName: "safari") }
-                }
-            }
-        }
         .task { await loadNotes() }
     }
 

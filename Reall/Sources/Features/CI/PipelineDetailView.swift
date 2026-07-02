@@ -48,9 +48,6 @@ struct PipelineDetailView: View {
                     Button {
                         Task { await retryPipeline() }
                     } label: { Label("Retry pipeline", systemImage: "arrow.clockwise") }
-                    if let url = pipeline.webURL {
-                        Link(destination: url) { Label("Open in browser", systemImage: "safari") }
-                    }
                 } label: {
                     if isWorking { ProgressView() } else { Image(systemName: "ellipsis.circle") }
                 }

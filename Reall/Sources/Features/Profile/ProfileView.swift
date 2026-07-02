@@ -15,11 +15,6 @@ struct ProfileView: View {
                             } label: {
                                 Label("My Projects", systemImage: "folder.fill")
                             }
-                            if let url = user.webURL {
-                                Link(destination: url) {
-                                    Label("View on GitLab", systemImage: "safari")
-                                }
-                            }
                         }
                         Section {
                             NavigationLink {
