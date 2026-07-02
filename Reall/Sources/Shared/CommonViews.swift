@@ -135,7 +135,8 @@ struct MarkdownView: View {
     }
 
     private var attributedMarkdown: AttributedString {
-        (try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(markdown)
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
     }
 }
 

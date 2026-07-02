@@ -156,8 +156,12 @@ struct ProjectIssuesView: View {
     var body: some View {
         Group {
             if let loader {
-                PagedListView(loader: loader, emptyTitle: "No open issues", emptyImage: "checkmark.seal") { issue in
-                    NavigationLink(value: Route.issue(issue)) { IssueRow(issue: issue) }
+                PagedListView(loader: loader, emptyTitle: "No issues", emptyImage: "checkmark.seal") { issue in
+                    NavigationLink {
+                        IssueDetailView(issue: issue)
+                    } label: {
+                        IssueRow(issue: issue)
+                    }
                 }
             } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
@@ -182,7 +186,11 @@ struct ProjectMergeRequestsView: View {
         Group {
             if let loader {
                 PagedListView(loader: loader, emptyTitle: "No open merge requests", emptyImage: "arrow.triangle.merge") { mr in
-                    NavigationLink(value: Route.mergeRequest(mr)) { MergeRequestRow(mr: mr) }
+                    NavigationLink {
+                        MergeRequestDetailView(mr: mr)
+                    } label: {
+                        MergeRequestRow(mr: mr)
+                    }
                 }
             } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
         }

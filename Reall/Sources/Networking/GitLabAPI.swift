@@ -205,7 +205,7 @@ final class GitLabAPI {
         return try await getPage(GitLabIssue.self, path: "issues", query: query, page: page)
     }
 
-    func issues(projectId: Int, state: String = "opened", page: Int = 1) async throws -> Page<GitLabIssue> {
+    func issues(projectId: Int, state: String = "all", page: Int = 1) async throws -> Page<GitLabIssue> {
         let query = [
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "order_by", value: "updated_at")
