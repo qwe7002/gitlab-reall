@@ -93,28 +93,11 @@ struct CommentBubble: View {
                 Spacer()
                 RelativeDateText(date: date).font(.caption).foregroundStyle(.secondary)
             }
-            MarkdownText(markdown)
+            MarkdownView(markdown)
                 .font(.subheadline)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-/// Renders a markdown string, falling back to plain text on parse failure.
-struct MarkdownText: View {
-    let raw: String
-    init(_ raw: String) { self.raw = raw }
-
-    var body: some View {
-        if let attributed = try? AttributedString(
-            markdown: raw,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            Text(attributed)
-        } else {
-            Text(raw)
-        }
     }
 }

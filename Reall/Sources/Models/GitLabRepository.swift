@@ -44,12 +44,27 @@ struct GitLabPipeline: Codable, Identifiable, Hashable {
     let webURL: URL?
     let createdAt: Date?
     let updatedAt: Date?
+    // Present on the single-pipeline detail endpoint, absent from list rows.
+    let startedAt: Date?
+    let finishedAt: Date?
+    let duration: Double?
+    let user: GitLabUser?
 
     enum CodingKeys: String, CodingKey {
-        case id, iid, status, ref, sha
+        case id, iid, status, ref, sha, duration, user
         case webURL = "web_url"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case startedAt = "started_at"
+        case finishedAt = "finished_at"
+    }
+}
+
+extension GitLabPipeline {
+    /// The first 8 characters of the commit SHA, GitLab short-ref style.
+    var shortSHA: String? {
+        guard let sha, !sha.isEmpty else { return nil }
+        return String(sha.prefix(8))
     }
 }
 

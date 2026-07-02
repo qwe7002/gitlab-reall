@@ -72,10 +72,41 @@ struct PipelineDetailView: View {
                     Text(status.label).font(.headline)
                     Text(projectName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
+                Spacer(minLength: 0)
             }
-            if let ref = pipeline.ref {
-                Label(ref, systemImage: "arrow.triangle.branch").font(.caption.monospaced())
+
+            HStack(spacing: 12) {
+                if let ref = pipeline.ref {
+                    Label(ref, systemImage: "arrow.triangle.branch").lineLimit(1)
+                }
+                if let sha = pipeline.shortSHA {
+                    Label(sha, systemImage: "number")
+                }
             }
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
+
+            HStack(spacing: 16) {
+                if let duration = pipeline.duration {
+                    Label(formatDuration(duration), systemImage: "clock")
+                }
+                if let finished = pipeline.finishedAt {
+                    RelativeDateText(date: finished, prefix: "finished ")
+                } else if let created = pipeline.createdAt {
+                    RelativeDateText(date: created, prefix: "created ")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if let user = pipeline.user {
+                HStack(spacing: 6) {
+                    AvatarView(url: user.avatarURL, fallbackText: user.displayName, size: 20)
+                    Text("Triggered by \(user.displayName)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
             HStack(spacing: 16) {
                 Label("\(passed) passed", systemImage: "checkmark.circle").foregroundStyle(.green)
                 if failed > 0 {
@@ -84,6 +115,12 @@ struct PipelineDetailView: View {
             }
             .font(.caption)
         }
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        if total >= 3600 { return "\(total / 3600)h \((total % 3600) / 60)m" }
+        return total >= 60 ? "\(total / 60)m \(total % 60)s" : "\(total)s"
     }
 
     private var stages: [String] {

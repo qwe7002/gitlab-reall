@@ -119,6 +119,41 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(todo.reference, "qwe7002/x")
     }
 
+    func testMarkdownParserSplitsBlocks() {
+        let md = """
+        # Title
+        Intro with **bold**.
+
+        - one
+        - two
+
+        ```
+        code line
+        ```
+
+        > a quote
+        """
+        let blocks = MarkdownParser.parse(md)
+        XCTAssertEqual(blocks.first, .heading(level: 1, text: "Title"))
+        XCTAssertTrue(blocks.contains(.paragraph("Intro with **bold**.")))
+        XCTAssertTrue(blocks.contains(.unorderedList(["one", "two"])))
+        XCTAssertTrue(blocks.contains(.codeBlock("code line")))
+        XCTAssertTrue(blocks.contains(.quote("a quote")))
+    }
+
+    func testMarkdownParserRuleIsNotAList() {
+        // "---" must be a horizontal rule, not an unordered list item.
+        XCTAssertEqual(MarkdownParser.parse("---"), [.rule])
+    }
+
+    func testPipelineShortSHA() {
+        let json = """
+        { "id": 3, "status": "success", "sha": "0123456789abcdef" }
+        """.data(using: .utf8)!
+        let pipeline = try! makeDecoder().decode(GitLabPipeline.self, from: json)
+        XCTAssertEqual(pipeline.shortSHA, "01234567")
+    }
+
     func testCIStatusMapping() {
         XCTAssertEqual(CIStatus("success"), .success)
         XCTAssertTrue(CIStatus("running").isActive)

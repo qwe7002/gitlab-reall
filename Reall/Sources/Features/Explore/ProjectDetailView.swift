@@ -58,7 +58,7 @@ struct ProjectDetailView: View {
                 Section { ProgressView().frame(maxWidth: .infinity) }
             } else if let readme, !readme.isEmpty {
                 Section("README") {
-                    MarkdownText(readme).font(.subheadline).padding(.vertical, 4)
+                    MarkdownView(readme).padding(.vertical, 4)
                 }
             }
         }
