@@ -75,6 +75,60 @@ struct HomeView: View {
     }
 }
 
+struct MyIssuesScreen: View {
+    @Environment(AppSession.self) private var session
+    @State private var loader: PaginatedLoader<GitLabIssue>?
+
+    var body: some View {
+        Group {
+            if let loader {
+                PagedListView(loader: loader, emptyTitle: "No assigned issues", emptyImage: "checkmark.seal") { issue in
+                    NavigationLink(value: Route.issue(issue)) {
+                        IssueRow(issue: issue, showProjectRef: true)
+                    }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationTitle("Issues")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard loader == nil, let api = session.api else { return }
+            let l = PaginatedLoader<GitLabIssue> { try await api.myIssues(page: $0) }
+            loader = l
+            await l.loadFirstIfNeeded()
+        }
+    }
+}
+
+struct MyMergeRequestsScreen: View {
+    @Environment(AppSession.self) private var session
+    @State private var loader: PaginatedLoader<GitLabMergeRequest>?
+
+    var body: some View {
+        Group {
+            if let loader {
+                PagedListView(loader: loader, emptyTitle: "No assigned merge requests", emptyImage: "arrow.triangle.merge") { mr in
+                    NavigationLink(value: Route.mergeRequest(mr)) {
+                        MergeRequestRow(mr: mr, showProjectRef: true)
+                    }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationTitle("Merge Requests")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard loader == nil, let api = session.api else { return }
+            let l = PaginatedLoader<GitLabMergeRequest> { try await api.myMergeRequests(page: $0) }
+            loader = l
+            await l.loadFirstIfNeeded()
+        }
+    }
+}
+
 /// A list row with a rounded, colour-filled icon tile, GitHub dashboard style.
 struct DashboardLabel: View {
     let title: String
