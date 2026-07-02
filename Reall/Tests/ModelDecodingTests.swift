@@ -154,6 +154,21 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(pipeline.shortSHA, "01234567")
     }
 
+    func testDecodeGroupWithAvatar() throws {
+        let json = """
+        {
+          "id": 9, "name": "telegram-sms", "path": "telegram-sms",
+          "full_path": "telegram-sms",
+          "avatar_url": "https://gitlab.com/uploads/group/avatar/9/logo.png",
+          "web_url": "https://gitlab.com/groups/telegram-sms"
+        }
+        """.data(using: .utf8)!
+        let group = try makeDecoder().decode(GitLabGroup.self, from: json)
+        XCTAssertEqual(group.name, "telegram-sms")
+        XCTAssertEqual(group.fullPath, "telegram-sms")
+        XCTAssertNotNil(group.avatarURL)
+    }
+
     func testCIStatusMapping() {
         XCTAssertEqual(CIStatus("success"), .success)
         XCTAssertTrue(CIStatus("running").isActive)

@@ -298,26 +298,28 @@ struct NewIssueView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
 
-    /// A project can be pre-selected (e.g. when creating from a project page).
-    let initialProject: GitLabProject?
-
-    @State private var projects: [GitLabProject] = []
-    @State private var selectedProjectId: Int?
-    @State private var loadingProjects = true
+    @State private var selectedProject: GitLabProject?
     @State private var title = ""
     @State private var description = ""
     @State private var isCreating = false
     @State private var errorMessage: String?
 
     init(project: GitLabProject? = nil) {
-        self.initialProject = project
-        _selectedProjectId = State(initialValue: project?.id)
+        _selectedProject = State(initialValue: project)
     }
 
     var body: some View {
         Form {
             Section {
-                projectPicker
+                NavigationLink {
+                    ProjectPickerView(selection: $selectedProject)
+                } label: {
+                    LabeledContent("Project") {
+                        Text(selectedProject?.nameWithNamespace ?? "Select")
+                            .foregroundStyle(selectedProject == nil ? .secondary : .primary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
                 TextField("Title", text: $title)
                 TextEditor(text: $description)
                     .frame(minHeight: 120)
@@ -339,49 +341,16 @@ struct NewIssueView: View {
                 }
             }
         }
-        .task { await loadProjects() }
-    }
-
-    @ViewBuilder
-    private var projectPicker: some View {
-        if loadingProjects && projects.isEmpty {
-            HStack {
-                Text("Project")
-                Spacer()
-                ProgressView()
-            }
-        } else if projects.isEmpty {
-            Text("No projects available").foregroundStyle(.secondary)
-        } else {
-            Picker("Project", selection: $selectedProjectId) {
-                Text("Select a project").tag(Int?.none)
-                ForEach(projects) { project in
-                    Text(project.nameWithNamespace).tag(Int?.some(project.id))
-                }
-            }
-        }
     }
 
     private var canSubmit: Bool {
-        selectedProjectId != nil
+        selectedProject != nil
             && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !isCreating
     }
 
-    private func loadProjects() async {
-        guard let api = session.api else { return }
-        loadingProjects = true
-        defer { loadingProjects = false }
-        var loaded = (try? await api.myProjects(page: 1).items) ?? []
-        // Make sure a pre-selected project is always present in the list.
-        if let initialProject, !loaded.contains(where: { $0.id == initialProject.id }) {
-            loaded.insert(initialProject, at: 0)
-        }
-        projects = loaded
-    }
-
     private func create() async {
-        guard let api = session.api, let id = selectedProjectId else { return }
+        guard let api = session.api, let id = selectedProject?.id else { return }
         isCreating = true
         defer { isCreating = false }
         do {
@@ -399,6 +368,10 @@ struct NewProjectView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
 
+    /// When set, the project is created inside this group's namespace.
+    let group: GitLabGroup?
+    let onCreated: ((GitLabProject) -> Void)?
+
     @State private var name = ""
     @State private var path = ""
     @State private var description = ""
@@ -406,9 +379,17 @@ struct NewProjectView: View {
     @State private var isCreating = false
     @State private var errorMessage: String?
 
+    init(group: GitLabGroup? = nil, onCreated: ((GitLabProject) -> Void)? = nil) {
+        self.group = group
+        self.onCreated = onCreated
+    }
+
     var body: some View {
         Form {
             Section {
+                if let group {
+                    LabeledContent("Group", value: group.fullPath ?? group.path)
+                }
                 TextField("Name", text: $name)
                 TextField("Path", text: $path)
                     .textInputAutocapitalization(.never)
@@ -430,8 +411,12 @@ struct NewProjectView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Create") { Task { await create() } }
-                    .disabled(!canSubmit)
+                if isCreating {
+                    ProgressView()
+                } else {
+                    Button("Create") { Task { await create() } }
+                        .disabled(!canSubmit)
+                }
             }
         }
         .onChange(of: name) { _, newValue in
@@ -448,10 +433,12 @@ struct NewProjectView: View {
         isCreating = true
         defer { isCreating = false }
         do {
-            _ = try await api.createProject(name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                                            path: path.trimmingCharacters(in: .whitespacesAndNewlines),
-                                            description: cleaned(description),
-                                            visibility: visibility)
+            let project = try await api.createProject(name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                      path: path.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                      description: cleaned(description),
+                                                      visibility: visibility,
+                                                      namespaceId: group?.id)
+            onCreated?(project)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
